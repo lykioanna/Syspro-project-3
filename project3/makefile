@@ -3,8 +3,8 @@ all: myhttpd mycrawler
 myhttpd: myhttpd.o Arguments.o
 	gcc myhttpd.o Arguments.o -o myhttpd -lpthread
 
-mycrawler: mycrawler.o ArgumentsCrawler.o
-		gcc mycrawler.o ArgumentsCrawler.o -o mycrawler -lpthread
+mycrawler: mycrawler.o ArgumentsCrawler.o queue.o
+		gcc mycrawler.o ArgumentsCrawler.o  queue.o -o mycrawler -lpthread
 
 myhttpd.o : myhttpd.c
 		gcc -c -g myhttpd.c -lpthread
@@ -17,6 +17,9 @@ Arguments.o: Arguments.c
 
 ArgumentsCrawler.o: ArgumentsCrawler.c
 		gcc -c -g ArgumentsCrawler.c
+
+queue.o : queue.c
+		gcc -c -g queue.c
 
 clean:
 		rm -f *.o myhttpd
