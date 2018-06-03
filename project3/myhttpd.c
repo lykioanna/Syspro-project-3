@@ -22,13 +22,151 @@ pthread_cond_t cond_handlers;
 pthread_cond_t cond_server;
 pool_t* pool;
 int pool_busy = 0;
+int tpages=0, tbytes=0;
 int exit_programm = 0;
+int server_fd,new_socket;
+fd_set read_fds;
 
 void* Handler(void* ptr){
-  acquire_handler();
-  //printf("%s\n",pool->requests[pool->start] );
-  release_handler();
+  char* my_path;
+  while(1){
+    acquire_handler();
+    printf("%ld   %s\n",pthread_self(),pool->requests[pool->start] );
+    my_path = malloc(strlen(pool->requests[pool->start])+1);
+    strcpy(my_path,pool->requests[pool->start]);
+    release_handler();
+
+    if(access(my_path,R_OK) != -1){    //OK message
+      FILE *fp;
+      fp=fopen(my_path, "r");
+      if (fp == NULL){
+          perror("FP OPEN");
+          exit(-1);
+      }
+      fseek(fp, 0, SEEK_END);
+      int size=0;
+      size = ftell(fp);
+      fseek(fp, 0, SEEK_SET);
+      char* text=NULL;
+      text= malloc((size+1)*sizeof(char));
+
+      fread(text,size,sizeof(char),fp);
+      text[size-1] = '\0';
+      fclose(fp);
+      int sizeOfMessage= strlen("HTTP/1.1 200 OK \n\
+Date: Mon, 27 May 2018 12:28:53 GMT\n\
+Server: myhttpd/1.0.0 (Ubuntu64)\n\
+Content-Length: 8873\n\
+Content-Type: text/html\n\
+Connection: Closed\n\
+                 \n")+ strlen(text);
+      char* message;
+      message= malloc(sizeof(char)*sizeOfMessage);
+      time_t t;
+      time(&t);
+      strcpy(message, "HTTP/1.1 200 OK \nDate: ");
+      time_t curtime;
+      struct tm *info;
+      char buffertime[80];
+      time( &curtime );
+      info = localtime( &curtime );
+      strftime(buffertime,80,"%a, %d %b %Y %X GMT \n", info);
+      strcat(message, buffertime);
+      strcat(message, "Server: myhttpd/1.0.0 (Ubuntu64)\nContent-Length:");
+      char txtsize[20];
+      sprintf(txtsize,"%d", size);
+      strcat(message, txtsize);
+      strcat(message, "\nContent-Type: text/html\nConnection: Closed \n\
+           \n");
+      strcat(message, text);
+      send(new_socket , message , strlen(message)+1 , 0 );
+      FD_CLR(server_fd,&read_fds);
+      close(new_socket);
+      tpages++;
+      tbytes+=size;
+      free(message);
+
+    }else if( access(my_path, F_OK ) == -1){    //FIle doesn't exist
+      int sizeofHtml= strlen("<html>Sorry dude, couldn&#39;t find this file.</html>");
+      int sizeOfMessage= strlen("HTTP/1.1 404 Not Found\n\
+Date: Mon, 27 May 2018 12:28:53 GMT\n\
+Server: myhttpd/1.0.0 (Ubuntu64)\n\
+Content-Length: \n\
+Content-Type: text/html\n\
+Connection: Closed\n\n")+20+sizeofHtml;
+      char* message;
+      message=malloc(sizeof(char)*sizeOfMessage);
+      strcpy(message, "HTTP/1.1 404 Not Found\nDate: ");
+      time_t curtime;
+      struct tm *info;
+      char buffertime[80];
+      time( &curtime );
+      info = localtime( &curtime );
+      strftime(buffertime,80,"%a, %d %b %Y %X GMT \n", info);
+      printf("%s\n",buffertime );
+      strcat(message, "Server: myhttpd/1.0.0 (Ubuntu64)\nContent-Length: ");
+      char txtsize[20];
+      sprintf(txtsize,"%d", sizeofHtml-13);
+      strcat(message, buffertime);
+      strcat(message, txtsize);
+      strcat(message, "\nContent-Type: text/html\nConnection: Closed\n\n<html>Sorry dude, couldn&#39;t find this file.</html>");
+      send(new_socket , message , strlen(message)+1 , 0 );
+      FD_CLR(server_fd,&read_fds);
+      close(new_socket);
+      free(message);
+
+    }else if(access(my_path, R_OK ) == -1){     //don't have permissions
+      int sizeofHtml= strlen("<html>Trying to access this file but don&#39;t think I can make it.</html>");
+      int sizeOfMessage= strlen("HTTP/1.1 403 Forbidden\n\
+Date: Mon, 27 May 2018 12:28:53 GMT\n\
+Server: myhttpd/1.0.0 (Ubuntu64)\n\
+Content-Length: \n\
+Content-Type: text/html\n\
+Connection: Closed\n\n")+20+sizeofHtml;
+      char* message;
+      message=malloc(sizeof(char)*sizeOfMessage);
+      strcpy(message,"HTTP/1.1 403 Forbidden\nDate: ");
+      time_t curtime;
+      struct tm *info;
+      char buffertime[80];
+      time( &curtime );
+      info = localtime( &curtime );
+      strftime(buffertime,80,"%a, %d %b %Y %X GMT \n", info);
+      printf("%s\n",buffertime );
+      strcat(message,"Server: myhttpd/1.0.0 (Ubuntu64)\nContent-Length: ");
+      char txtsize[20];
+      sprintf(txtsize,"%d", sizeofHtml-13);
+      strcat(message, txtsize);
+      strcat(message,"Content-Type: text/html\nConnection: Closed\n\n" );
+      strcat(message,"<html>Trying to access this file but don&#39;t think I can make it.</html>");
+      send(new_socket , message , strlen(message)+1 , 0 );
+      FD_CLR(server_fd,&read_fds);
+      close(new_socket);
+      free(message);
+    }
+    free(my_path);
+  }
   return NULL;
+}
+
+char *trimwhitespace(char *str)
+{
+  char *end;
+
+  // Trim leading space
+  while(isspace((unsigned char)*str)) str++;
+
+  if(*str == 0)  // All spaces?
+    return str;
+
+  // Trim trailing space
+  end = str + strlen(str) - 1;
+  while(end > str && isspace((unsigned char)*end)) end--;
+
+  // Write new null terminator
+  *(end+1) = 0;
+
+  return str;
 }
 
 pool_t* initPool(){
@@ -65,12 +203,12 @@ void acquire_server(){
     pthread_exit((void*) 0);
   }
   pool_busy = 1;
+  pool-> end =( pool->end + 1) % POOL_SIZE ;
   pthread_mutex_unlock(&mtx);
 }
 
 void release_server(){
   pthread_mutex_lock(&mtx);
-  pool-> end =( pool->end + 1) % POOL_SIZE ;
   pool->count++;
   pool_busy = 0;
   pthread_cond_signal(&cond_handlers);
@@ -83,9 +221,9 @@ void acquire_handler(){
     pthread_cond_wait(&cond_handlers, &mtx);
   }
   if(exit_programm == 1){
-    printf("eksw\n" );
-    pthread_cond_signal(&cond_handlers);
-    pthread_cond_signal(&cond_server);
+    printf("%ld thread finishing\n",pthread_self() );
+    pthread_cond_broadcast(&cond_handlers);
+    // pthread_cond_signal(&cond_server);
     pthread_mutex_unlock(&mtx);
     pthread_exit((void*) 0);
   }
@@ -96,11 +234,12 @@ void acquire_handler(){
 void release_handler(){
   pthread_mutex_lock(&mtx);
   free(pool->requests[pool->start]);
+  pool->requests[pool->start]=NULL;
   pool->start = ( pool ->start + 1) % POOL_SIZE ;
   pool->count--;
   pool_busy = 0;
-  pthread_cond_signal(&cond_handlers);
   pthread_cond_signal(&cond_server);
+  pthread_cond_signal(&cond_handlers);
   pthread_mutex_unlock(&mtx);
 }
 
@@ -108,6 +247,7 @@ void release_handler(){
 int main(int argc, char* argv[]){
   int serving_port=0, command_port=0, num_of_threads=0, i, sock;
   char *root_dir;
+  clock_t begin = clock();
 
   if( argc != 9){
     printf("Wrong Number of args. Try again\n");
@@ -130,9 +270,24 @@ int main(int argc, char* argv[]){
     exit(1);
   }
 
+
+    pthread_t handlers[num_of_threads];
+    pool = initPool();
+
+    for(i=0;i<num_of_threads;i++){
+        printf("Created handler\n");
+      if(pthread_create(&handlers[i], NULL, Handler, NULL)){
+            perror("Fail to create thread");
+            exit(1);
+        }
+    }
+    pthread_mutex_init(&mtx, NULL);
+    pthread_cond_init(&cond_handlers, NULL);
+    pthread_cond_init(&cond_server, NULL);
+
 ////1ST SOCKET
 // Creating socket file descriptor /////////////////////////////////////////////
-  int server_fd, new_socket, valread;
+  int valread;
   struct sockaddr_in address;
   int opt = 1;
   int addrlen = sizeof(address);
@@ -170,7 +325,7 @@ int main(int argc, char* argv[]){
     struct sockaddr_in address2;
     int opt2 = 1;
     int addrlen2 = sizeof(address2);
-    char buffer2[1024] = {0};
+    char buffer2[1024];
     char *hello2 = "Hello from server2";
 
     // Creating socket file descriptor
@@ -205,8 +360,7 @@ int main(int argc, char* argv[]){
     }
 ////////////////////////////////////////////////////////////////////////////////
 
-//gia na katalabainei ti akouei
-  fd_set read_fds;
+//gia na katalabainei ti akouei/////////////////////////////////////////////////
   while(1){
     FD_ZERO(&read_fds);
     FD_SET(server_fd, &read_fds);
@@ -217,7 +371,7 @@ int main(int argc, char* argv[]){
     }else if(ret==0){
       printf("timeout\n");
     }else {
-      if (FD_ISSET(server_fd, &read_fds)){
+      if (FD_ISSET(server_fd, &read_fds)){////////////////1SOCKET///////////////
         if ((new_socket = accept(server_fd, (struct sockaddr *)&address,(socklen_t*)&addrlen))<0){
             perror("accept");
             exit(EXIT_FAILURE);
@@ -225,136 +379,57 @@ int main(int argc, char* argv[]){
         valread = read( new_socket , buffer, 1024);
         char *token;
         char *rest;
-
         //printf("%s\n",buffer );
         token = strtok_r(buffer, " ", &rest);
         token = strtok_r(NULL," ", &rest);
-
         printf("TO TOKEN: %s \n", token);
 
         ///////////////////////////////
+        acquire_server();
+        pool->requests[pool->end ] = malloc(sizeof(char)*strlen(token)+1);
+        strcpy(pool->requests[pool->end],token);
+        release_server();
 
-        if(access(token, F_OK | R_OK) != -1){
-          FILE *fp;
-          fp=fopen(token, "r");
-          if (fp == NULL){
-              perror("FP OPEN");
-              exit(-1);
-          }
-          fseek(fp, 0, SEEK_END);
-          int size=0;
-          size = ftell(fp);
-          fseek(fp, 0, SEEK_SET);
-          char* text=NULL;
-          text= malloc(size);
-          if (text){
-            fread(text,1,size,fp);
-          }
-          fclose(fp);
-          int sizeOfMessage= strlen("HTTP/1.1 200 OK \n\
-Date: Mon, 27 May 2018 12:28:53 GMT\n\
-Server: myhttpd/1.0.0 (Ubuntu64)\n\
-Content-Length: 8873\n\
-Content-Type: text/html\n\
-Connection: Closed\n\
-                     \n")+ strlen(text);
-          char* message;
-          message= malloc(sizeof(char)*sizeOfMessage);
-          time_t t;
-          time(&t);
-          strcpy(message, "HTTP/1.1 200 OK \nDate: ");
-          time_t curtime;
-    			struct tm *info;
-    			char buffertime[80];
-    			time( &curtime );
-    			info = localtime( &curtime );
-    			strftime(buffertime,80,"%a, %d %b %Y %X GMT \n", info);
-          strcat(message, buffertime);
-          strcat(message, "Server: myhttpd/1.0.0 (Ubuntu64)\nContent-Length:");
-          char txtsize[20];
-          sprintf(txtsize,"%d", size);
-          strcat(message, txtsize);
-          strcat(message, "\nContent-Type: text/html\nConnection: Closed \n\
-               \n");
-          strcat(message, text);
-          send(new_socket , message , strlen(message)+500 , 0 );
-          FD_CLR(server_fd,&read_fds);
-          close(new_socket);
-          free(message);
-
-        }else if( access(token, F_OK )== -1){
-          int sizeOfMessage= strlen("HTTP/1.1 404 Not Found\n\
-Date: Mon, 27 May 2018 12:28:53 GMT\n\
-Server: myhttpd/1.0.0 (Ubuntu64)\n\
-Content-Length: 124\n\
-Content-Type: text/html\n\
-Connection: Closed\n\
-                     \n");
-          char* message;
-          message=malloc(sizeof(char)*sizeOfMessage);
-          strcpy(message, "HTTP/1.1 404 Not Found\nDate: ");
-          time_t curtime;
-    			struct tm *info;
-    			char buffertime[80];
-    			time( &curtime );
-    			info = localtime( &curtime );
-    			strftime(buffertime,80,"%a, %d %b %Y %X GMT \n", info);
-          strcat(message, buffertime);
-          sizeOfMessage= strlen(">Sorry dude, couldn’t find this file.<");
-          strcat(message, "Server: myhttpd/1.0.0 (Ubuntu64)\nContent-Length: ");
-          char txtsize[20];
-          sprintf(txtsize,"%d", sizeOfMessage);
-          strcat(message, txtsize);
-          strcat(message, "\n Content-Type: text/html\nConnection: Closed\n\
-          \n\
-<html>Sorry dude, couldn’t find this file.</html>");
-
-          free(message);
-
-        }
-
-      }
+      }//////////////////////////////////////2SOCKET////////////////////////////
       if (FD_ISSET(command_fd, &read_fds)){
         if ((new_socket2 = accept(command_fd, (struct sockaddr *)&address2,
                            (socklen_t*)&addrlen2))<0){
             perror("accept");
             exit(EXIT_FAILURE);
         }
+
         valread2 = read( new_socket2 , buffer2, 1024);
-        printf("%s\n",buffer2 );
-        send(new_socket2 , hello2 , strlen(hello2) , 0 );
-        printf("Hello message sent2\n");
-        FD_CLR(command_fd,&read_fds);
-        close(new_socket2);
+        buffer2[valread2]='\0';
+        trimwhitespace(buffer2);
+
+        if (!strcmp(buffer2,"STATS")){
+          clock_t end = clock();
+          double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+          printf("Server up for %lf, served %d pages, %d bytes\n", time_spent, tpages, tbytes);
+          FD_CLR(command_fd,&read_fds);
+          close(new_socket2);
+
+        }else if (!strcmp(buffer2,"SHUTDOWN")){
+          printf("Exiting Web Server...\n");
+          break;
+        }else{
+          send(new_socket2, "\nWrong Command", strlen("\nWrong Command"), 0);
+        }
+        // send(new_socket2 , hello2 , strlen(hello2) , 0 );
+        // printf("Hello message sent2\n");
+        //FD_CLR(command_fd,&read_fds);
+        //close(new_socket2);
 
       }
     }
   }
 ////////////////////////////////////////////////////////////////////////////////
 
-  pthread_t handlers[num_of_threads];
-  pool = initPool();
 
-  for(i=0;i<num_of_threads;i++){
-      printf("Created handler\n");
-    if(pthread_create(&handlers[i], NULL, Handler, NULL)){
-          perror("Fail to create thread");
-          exit(1);
-      }
-  }
-  pthread_mutex_init(&mtx, NULL);
-  pthread_cond_init(&cond_handlers, NULL);
-  pthread_cond_init(&cond_server, NULL);
 
-  acquire_server();
-  pool->requests[pool->end+1] = malloc(sizeof(char)*strlen(buffer));
-  strcpy(pool->requests[pool->end+1],buffer);
-  release_server();
-
-  sleep(2);
-  printf("telos\n" );
+  sleep(3);
   exit_programm = 1 ;
-  pthread_cond_signal(&cond_handlers);
+  pthread_cond_broadcast(&cond_handlers);
 
   for(i=0;i<num_of_threads;i++){
       if(pthread_join(handlers[i], NULL)){
@@ -379,7 +454,7 @@ Connection: Closed\n\
       exit(1);
   }
 
-  //freePool(&pool);
+  freePool(&pool);
   free(root_dir);
   return 0;
 }

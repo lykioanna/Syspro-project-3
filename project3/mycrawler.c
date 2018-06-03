@@ -8,6 +8,8 @@
 #include <string.h>
 #include "ArgumentsCrawler.h"
 #include "myhttpd.h"
+#include <sys/types.h>
+#include <sys/stat.h>
 
 
 
@@ -58,14 +60,19 @@ int main(int argc, char *argv[]){
     exit(1);
   }
 
+  struct stat st = {0};
+
+  if (stat(save_dir, &st) == -1) {
+      mkdir(save_dir, 0700);
+  }
+
   pool = initPool();
   int sizeOfGet = strlen("GET  HTTP/1.1\n\
-  User-Agent: Mozilla/4.0 (compatible; MSIE5.01; Windows NT)\n\
-  Host: www.tutorialspoint.com\n\
-  Accept-Language: en-us\n\
-  Accept-Encoding: gzip, deflate\n\
-  Connection: Keep-Alive\n\
-                      \n")+strlen(starting_URL)+1;
+User-Agent: Mozilla/4.0 (compatible; MSIE5.01; Windows NT)\n\
+Host: www.tutorialspoint.com\n\
+Accept-Language: en-us\n\
+Accept-Encoding: gzip, deflate\n\
+Connection: Keep-Alive\n\n")+strlen(starting_URL)+1;
   char *message;
   message= malloc(sizeof(char)*sizeOfGet);
   sprintf(message, "GET %s HTTP/1.1\n\
@@ -73,8 +80,7 @@ User-Agent: Mozilla/4.0 (compatible; MSIE5.01; Windows NT)\n\
 Host: www.tutorialspoint.com\n\
 Accept-Language: en-us\n\
 Accept-Encoding: gzip, deflate\n\
-Connection: Keep-Alive\n\
-                      \n", starting_URL);
+Connection: Keep-Alive\n\n", starting_URL);
   printf(" TO MINImA %s\n", message);
 
 
@@ -83,7 +89,6 @@ Connection: Keep-Alive\n\
   struct sockaddr_in address;
   int serving_sock = 0, valread;
   struct sockaddr_in serv_addr;
-  char *hello = "Hello from client";
   char buffer[1024] = {0};
   if ((serving_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0){
       printf("\n Socket creation error \n");
@@ -107,47 +112,72 @@ Connection: Keep-Alive\n\
       return -1;
   }
   send(serving_sock , message , strlen(message) , 0 );
-  printf("Hello message sent\n");
-  while(1){
-    valread = read( serving_sock , buffer, 1024);
-    printf("%s\n",buffer );
+  printf("message sent\n");
+
+  char* token;
+  char* rest;
+  char* tmpbuff;
+
+  valread = read( serving_sock , buffer, 1024);
+  buffer[valread-1]='\0';
+  tmpbuff = malloc(sizeof(char)*strlen(buffer)+1);
+  strcpy(tmpbuff, buffer);
+  token=strtok_r(tmpbuff," ",&rest);
+  token=strtok_r(NULL," ",&rest);
+  printf("TOKEN %s\n",token);
+
+  if (!strcmp(token,"200")){
+
+  }else if(!strcmp(token,"404")){
+
+  }else if(!strcmp(token,"403")){
+
   }
+
+  while (valread>0){
+    //printf("%s\n",buffer);
+    valread = read( serving_sock , buffer, 1024);
+    buffer[valread-1]='\0';
+  }
+
+
+
 
 ////////////////////////////////////////////////////////////////////////////////
 
 // 2ND SOCKET
-  struct sockaddr_in address2;
-  int command_sock = 0, valread2;
-  struct sockaddr_in serv_addr2;
-  char *hello2 = "Hello from client2";
-  char buffer2[1024] = {0};
-  if ((command_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-  {
-      printf("\n Socket creation error \n");
-      return -1;
-  }
-
-  memset(&serv_addr2, '0', sizeof(serv_addr2));
-
-  serv_addr2.sin_family = AF_INET;
-  serv_addr2.sin_port = htons( command_port );
-
-  // Convert IPv4 and IPv6 addresses from text to binary form
-  if(inet_pton(AF_INET, "127.0.0.1", &serv_addr2.sin_addr)<=0)
-  {
-      printf("\nInvalid address/ Address not supported \n");
-      return -1;
-  }
-
-  if (connect(command_sock, (struct sockaddr *)&serv_addr2, sizeof(serv_addr2)) < 0)
-  {
-      printf("\nConnection Failed \n");
-      return -1;
-  }
-  send(command_sock , hello2 , strlen(hello2) , 0 );
-  printf("Hello message sent2\n");
-  valread2 = read( command_sock , buffer2, 1024);
-  printf("%s\n",buffer2 );
+  // struct sockaddr_in address2;
+  // int command_sock = 0, valread2;
+  // struct sockaddr_in serv_addr2;
+  // char *hello2 = "Hello from client2";
+  // char buffer2[1024] = {0};
+  // if ((command_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+  // {
+  //     printf("\n Socket creation error \n");
+  //     return -1;
+  // }
+  //
+  // memset(&serv_addr2, '0', sizeof(serv_addr2));
+  //
+  // serv_addr2.sin_family = AF_INET;
+  // serv_addr2.sin_port = htons( command_port );
+  //
+  // // Convert IPv4 and IPv6 addresses from text to binary form
+  // if(inet_pton(AF_INET, "127.0.0.1", &serv_addr2.sin_addr)<=0)
+  // {
+  //     printf("\nInvalid address/ Address not supported \n");
+  //     return -1;
+  // }
+  //
+  // if (connect(command_sock, (struct sockaddr *)&serv_addr2, sizeof(serv_addr2)) < 0)
+  // {
+  //     printf("\nConnection Failed \n");
+  //     return -1;
+  // }
+  // send(command_sock , hello2 , strlen(hello2) , 0 );
+  // printf("Hello message sent2\n");
+  // valread2 = read( command_sock , buffer2, 1024);
+  // printf("%s\n",buffer2 );
 ////////////////////////////////////////////////////////////////////////////////
 
   freePool(&pool);
