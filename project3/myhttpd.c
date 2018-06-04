@@ -377,17 +377,20 @@ int main(int argc, char* argv[]){
             exit(EXIT_FAILURE);
         }
         valread = read( new_socket , buffer, 1024);
-        char *token;
-        char *rest;
-        //printf("%s\n",buffer );
-        token = strtok_r(buffer, " ", &rest);
-        token = strtok_r(NULL," ", &rest);
-        printf("TO TOKEN: %s \n", token);
+        char *fullpath;
+        char *token, *rest;
+        // //printf("%s\n",buffer );
+        token = strchr(buffer, '/');
+        token = strtok_r(token," ", &rest);
+        fullpath=malloc(sizeof(char)*(strlen(root_dir)+strlen(buffer)+1));
+        strcpy(fullpath,root_dir);
+        strcat(fullpath,token);
+        printf("TO FULLPATH: %s \n", fullpath);
 
         ///////////////////////////////
         acquire_server();
-        pool->requests[pool->end ] = malloc(sizeof(char)*strlen(token)+1);
-        strcpy(pool->requests[pool->end],token);
+        pool->requests[pool->end ] = malloc(sizeof(char)*strlen(fullpath)+1);
+        strcpy(pool->requests[pool->end],fullpath);    //THEMA MNIMIS?????????????????
         release_server();
 
       }//////////////////////////////////////2SOCKET////////////////////////////

@@ -8,8 +8,13 @@
 #include <string.h>
 #include "ArgumentsCrawler.h"
 #include "myhttpd.h"
+#include "queue.h"
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <ctype.h>
 
 
 
@@ -39,10 +44,10 @@ void freePool(pool_t** pool){
   *pool = NULL;
 }
 
-int main(int argc, char *argv[]){
+int main(int argc, char *argv[]){///////////////////////////////////////////////
 
   int host_or_ip=0, port=0, command_port=0, num_of_threads=0;
-  char *save_dir, *starting_URL;
+  char *save_dir, *starting_URL, *token1, *rest1, *url;
   save_dir=NULL;
   starting_URL=NULL;
   read_args(&host_or_ip, &port, &command_port, &num_of_threads, &save_dir, &starting_URL, argc, argv);
@@ -60,11 +65,20 @@ int main(int argc, char *argv[]){
     exit(1);
   }
 
+  //elegxei an yparxei o fakelos
   struct stat st = {0};
-
   if (stat(save_dir, &st) == -1) {
       mkdir(save_dir, 0700);
   }
+
+  // token1= strtok_r(starting_URL,"/", &rest1);
+  // token1= strtok_r(NULL,"/", &rest1);
+  // //token1= strtok_r(NULL,"/", &rest1);
+  // token1= strtok_r(NULL,"", &rest1);
+  // url=malloc(sizeof(char)*(1+strlen(token1)));
+  // strcpy(url, token1);    //Websites/../..
+
+
 
   pool = initPool();
   int sizeOfGet = strlen("GET  HTTP/1.1\n\
@@ -81,7 +95,7 @@ Host: www.tutorialspoint.com\n\
 Accept-Language: en-us\n\
 Accept-Encoding: gzip, deflate\n\
 Connection: Keep-Alive\n\n", starting_URL);
-  printf(" TO MINImA %s\n", message);
+  printf(" Message Sent: %s\n", message);
 
 
 // 1ST SOCKET
@@ -116,21 +130,76 @@ Connection: Keep-Alive\n\n", starting_URL);
 
   char* token;
   char* rest;
-  char* tmpbuff;
+  char* tmpbuff, *ret, *fmessage;
+  char* Content;      //periexomena arxeiou
+  fmessage=malloc(sizeof(char)*(1025));
+  int filesize=0, response=0;
 
-  valread = read( serving_sock , buffer, 1024);
+  valread = read( serving_sock , buffer, 1024); //pairnei tin apantisi
   buffer[valread-1]='\0';
-  tmpbuff = malloc(sizeof(char)*strlen(buffer)+1);
-  strcpy(tmpbuff, buffer);
+  strcpy(fmessage, buffer);                      //oli i proti apantisi
+  tmpbuff = malloc(sizeof(char)*(strlen(buffer)+1));
+  strcpy(tmpbuff, buffer);                       //tmpbuff gia na brw tin APANTISI
   token=strtok_r(tmpbuff," ",&rest);
   token=strtok_r(NULL," ",&rest);
-  printf("TOKEN %s\n",token);
+  response= atoi(token);                        //arithmos APANTISIS
+  printf("Response: %d\n",response);
 
-  if (!strcmp(token,"200")){
+  ret=strstr(fmessage,"Content-Length:");
+  filesize= atoi(ret+15);
+  Content=malloc(sizeof(char)*(filesize+1));
+  strcpy(Content, fmessage);
 
-  }else if(!strcmp(token,"404")){
 
-  }else if(!strcmp(token,"403")){
+  if (response==200){
+    char* subfolder;    //Crawler/site0
+    char* sitefile;     //Crawler/site0/page987
+    //starting_URL : site0/page0_232
+    char *tmp;
+    tmp=malloc(sizeof(char)*(strlen(starting_URL)+1));
+    strcpy(tmp,starting_URL);
+
+    sitefile=malloc(sizeof(char)*(strlen(save_dir)+strlen(starting_URL)+2));
+    strcpy(sitefile,save_dir);
+    strcat(sitefile,starting_URL);
+
+    token1=strtok_r(tmp,"/",&rest1);
+    subfolder=malloc(sizeof(char)*(strlen(save_dir)+strlen(token1)+2));
+    strcpy(subfolder,save_dir);
+    strcat(subfolder,"/");
+    strcat(subfolder,token1);
+    printf("SUBFOLDER %s\n",subfolder);
+
+
+    //anoigei ton ypofakelo
+    if (stat(subfolder, &st) == -1) {
+        mkdir(subfolder, 0700);
+    }
+    //anoigei to arxeio
+    FILE *fp = fopen(sitefile, "ab+");
+    while(valread>0){
+      valread = read( serving_sock , buffer, 1024);
+      fprintf(fp, "%s",buffer);
+      memcpy(Content,buffer, strlen(buffer)+1);
+    }
+
+
+      // ret=strstr(Content,"<a href=");
+      // do {
+      //   //to vazei stin oura
+      //   //printf("LINKKK %s\n",ret);
+      //
+      //   ret=strstr(Content,"<a href=");
+      // } while(1);
+
+    free(fmessage);
+    free(subfolder);
+    free(sitefile);
+    free(tmp);
+    free(tmpbuff);
+  }else if(response==404){
+
+  }else if(response==403){
 
   }
 
@@ -140,6 +209,7 @@ Connection: Keep-Alive\n\n", starting_URL);
     buffer[valread-1]='\0';
   }
 
+free(Content);
 
 
 
@@ -151,8 +221,7 @@ Connection: Keep-Alive\n\n", starting_URL);
   // struct sockaddr_in serv_addr2;
   // char *hello2 = "Hello from client2";
   // char buffer2[1024] = {0};
-  // if ((command_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-  // {
+  // if ((command_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0){
   //     printf("\n Socket creation error \n");
   //     return -1;
   // }
@@ -163,14 +232,12 @@ Connection: Keep-Alive\n\n", starting_URL);
   // serv_addr2.sin_port = htons( command_port );
   //
   // // Convert IPv4 and IPv6 addresses from text to binary form
-  // if(inet_pton(AF_INET, "127.0.0.1", &serv_addr2.sin_addr)<=0)
-  // {
+  // if(inet_pton(AF_INET, "127.0.0.1", &serv_addr2.sin_addr)<=0){
   //     printf("\nInvalid address/ Address not supported \n");
   //     return -1;
   // }
   //
-  // if (connect(command_sock, (struct sockaddr *)&serv_addr2, sizeof(serv_addr2)) < 0)
-  // {
+  // if (connect(command_sock, (struct sockaddr *)&serv_addr2, sizeof(serv_addr2)) < 0){
   //     printf("\nConnection Failed \n");
   //     return -1;
   // }
@@ -178,9 +245,13 @@ Connection: Keep-Alive\n\n", starting_URL);
   // printf("Hello message sent2\n");
   // valread2 = read( command_sock , buffer2, 1024);
   // printf("%s\n",buffer2 );
+
+
 ////////////////////////////////////////////////////////////////////////////////
 
+////////////////////////////////////////////////////////////////////////////////
   freePool(&pool);
+  free(url);
   free(save_dir);
   free(starting_URL);
   return 0;
