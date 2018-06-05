@@ -4,7 +4,7 @@
 #include "ArgumentsCrawler.h"
 
 //Arguments' Function Crawler
-void read_args(int* host_or_ip, int* port, int* command_port, int* num_of_threads, char** save_dir, char** starting_URL, int argc,char* argv[]){
+void read_args(char** host_or_ip, int* port, int* command_port, int* num_of_threads, char** save_dir, char** starting_URL, int argc,char* argv[]){
   int i;
   for(i=0 ; i< argc ; i++){
     if(!strcmp(argv[i],"-d")){
@@ -19,7 +19,8 @@ void read_args(int* host_or_ip, int* port, int* command_port, int* num_of_thread
     }else if (!strcmp(argv[i],"-t")){
       *num_of_threads=atoi(argv[i+1]);
     }else if (!strcmp(argv[i],"-h")){
-      *host_or_ip=atoi(argv[i+1]);
+      *host_or_ip= malloc(sizeof(char)*(strlen(argv[i+1])+1));
+      strcpy(*host_or_ip, argv[i+1]);
     }
   }
 }
